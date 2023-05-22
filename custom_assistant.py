@@ -4,18 +4,18 @@ import PySimpleGUI as sg
 from elevenlabslib import *
 
 # Enter keys for OpenAI and ElevenLabs, then put voice model's name and your name
-openai.api_key = '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'
-elevenLabsAPIKey = '9fe3e2fe88d92bfb0c3af2cde624d296'
+OPENAI_API_KEY = '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'
+ELEVENLABS_KEY = '9fe3e2fe88d92bfb0c3af2cde624d296'
+openai.api_key = OPENAI_API_KEY
+elevenLabsAPIKey = ELEVENLABS_KEY
 model = 'Ving Rhames'
-your_name = 'Micah'
+YOUR_NAME = 'Micah'
 user = ElevenLabsUser(elevenLabsAPIKey)
 voice = user.get_voices_by_name(model)[0]
 
 # ----- GUI Definition ----- #
 sg.theme("dark grey 9")
 layout = [[sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
-          # [sg.Text("OpenAI Key:"), sg.Input(key="-OPENAI KEY-")],
-          # [sg.Text("ElevenLabs Key:"), sg.Input(key="-ELEVEN LABS KEY-")],
           [sg.Text("Model:"), sg.Input(key="-MODEL-")],
           [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
           [sg.Multiline(key="-OUT-")],
@@ -31,28 +31,23 @@ mic = sr.Microphone()
 
 # initializing the conversation between user and model before queries with context
 conversation = [
-    {"role": "system", "content": f"Your name is {model} and you're an assistant for {your_name}."},
+    {"role": "system", "content": f"Your name is {model} and you're an assistant for {YOUR_NAME}."},
 ]
 
 
-def update_from_user_inputs(user_window, user_values):
+def update_from_user_inputs(user_values):
     """
-    :param user_window: window where user inputted keys
-    :param user_values: values associated with user_window
+    :param user_values: values associated with user's window
     :return: None
     """
-    openai.api_key = user_values["-OPENAI KEY-"]
-    elevenLabsAPIKey = user_values["-ELEVEN LABS KEY-"]
     model = user_values["-MODEL-"]
-    your_name = user_values["-USER NAME-"]
     user = ElevenLabsUser(elevenLabsAPIKey)
     voice = user.get_voices_by_name(model)[0]
 
 
-def is_valid_user(user_window, user_values):
+def is_valid_user(user_values):
     """"
     Checks if user's keys are valid
-    :param user_window: window where user inputted keys
     :param user_values: values associated with user_window
     Checks the given keys for OpenAI and ElevenLabs given by user
     :return: boolean value of valid or not
@@ -125,8 +120,8 @@ while True:
         break
 
     # Option 1: User Speaks Question
-    if event == "Speak" and is_valid_user(window, values):
-        update_from_user_inputs(window, values)
+    if event == "Speak" and is_valid_user(values):
+        update_from_user_inputs(values)
 
         with mic as source:
             r.adjust_for_ambient_noise(source)  # Can set the duration with duration keyword
@@ -172,8 +167,8 @@ while True:
                 print("=====")
 
     # Option 2: User writes question
-    if event == "Type" and is_valid_user(window, values):
-        update_from_user_inputs(window, values)
+    if event == "Type" and is_valid_user(values):
+        update_from_user_inputs(values)
 
 
 window.close()
