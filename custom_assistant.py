@@ -2,6 +2,9 @@ import speech_recognition as sr
 import openai
 import PySimpleGUI as sg
 from elevenlabslib import *
+from pathlib import Path
+from configparser import ConfigParser
+import requests
 
 # Enter keys for OpenAI and ElevenLabs, then put voice model's name and your name
 OPENAI_API_KEY = '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'
@@ -13,18 +16,6 @@ YOUR_NAME = 'Micah'
 user = ElevenLabsUser(elevenLabsAPIKey)
 voice = user.get_voices_by_name(model)[0]
 
-# ----- GUI Definition ----- #
-sg.theme("dark grey 9")
-layout = [[sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
-          [sg.Text("Model:"), sg.Input(key="-MODEL-")],
-          [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
-          [sg.Multiline(key="-OUT-")],
-          [sg.Save("Save"), sg.Exit("Exit")]
-          ]
-
-# Create the window
-window = sg.Window("AI Assistant", layout)
-
 # find microphone to use later to record audio
 r = sr.Recognizer()
 mic = sr.Microphone()
@@ -33,6 +24,43 @@ mic = sr.Microphone()
 conversation = [
     {"role": "system", "content": f"Your name is {model} and you're an assistant for {YOUR_NAME}."},
 ]
+
+
+def get_users_models():
+    models = []
+
+    # Replace 'YOUR_API_KEY' with your ElevenLabs API key
+    API_KEY = ELEVENLABS_KEY
+
+    # Set the base URL for the ElevenLabs API
+    BASE_URL = 'https://api.elevenlabs.io/v1'
+
+    # Set the endpoint to retrieve the voices
+    ENDPOINT = '/voices'
+
+    # Set the headers including the API key
+    headers = {
+        'accept': 'application/json',
+        'xi-api-key': API_KEY
+    }
+
+    # Send a GET request to retrieve the voices
+    response = requests.get(BASE_URL + ENDPOINT, headers=headers)
+
+    # Check if the request was successful
+    if response.status_code == 200:
+        voices = response.json()['voices']
+
+        # Extract the names of the voices
+        voice_names = [voice['name'] for voice in voices]
+
+        # Print the voice names
+        for name in voice_names:
+            models.append(name)
+    else:
+        print('Error:', response.status_code)
+
+    return models
 
 
 def update_from_user_inputs(user_values):
@@ -112,66 +140,95 @@ def generate_text_response(prompt, ongoing_convo):
     return answer
 
 
-while True:
-    event, values = window.read()
-    print(event, values)
-    # user closes window
-    if event in (sg.WINDOW_CLOSED, "Exit"):
-        break
+def main_window():
+    # ----- GUI Definition ----- #
+    sg.theme("dark grey 9")
+    layout = [[sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
+              [sg.Text("Model:"), sg.Input(key="-MODEL-")],
+              [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
+              [sg.Multiline(key="-OUT-")],
+              [sg.Save("Save"), sg.Button("Settings"), sg.Exit("Exit")]
+              ]
 
-    # Option 1: User Speaks Question
-    if event == "Speak" and is_valid_user(values):
-        update_from_user_inputs(values)
+    # Create the window
+    window_title = settings["GUI"]["title"]
+    window = sg.Window(window_title, layout)
 
-        with mic as source:
-            r.adjust_for_ambient_noise(source)  # Can set the duration with duration keyword
+    while True:
+        event, values = window.read()
+        print(event, values)
+        # user closes window
+        if event in (sg.WINDOW_CLOSED, "Exit"):
+            break
 
-            window["-OUT-"].update("Speak now...")
-            # print("Speak now...")
+        # Option 1: User Speaks Question
+        if event == "Speak" and is_valid_user(values):
+            update_from_user_inputs(values)
 
-            try:
-                # Gather audio and transcribe to text
-                audio = r.listen(source)
-                word = r.recognize_google(audio)
+            with mic as source:
+                r.adjust_for_ambient_noise(source)  # Can set the duration with duration keyword
 
-                # Show user's query
-                window["-OUT-"].add_row(word)
-                print(f"You said: {word}")
+                window["-OUT-"].update("Speak now...")
+                # print("Speak now...")
 
-                # Close window and quit program when user says "That is all"
-                if word.lower() == "that is all":
-                    print(f"{model}: See you later!")
-                    window.close()
-                    quit()
+                try:
+                    # Gather audio and transcribe to text
+                    audio = r.listen(source)
+                    word = r.recognize_google(audio)
 
-                # if user wants to assistant to draw something (has "draw" in prompt)
-                if "draw" in word:
-                    image_url = generate_image_response(word)
-                    print(f"{model}: Here's {word[i:]}")
-                    print(image_url)
+                    # Show user's query
+                    window["-OUT-"].add_row(word)
+                    print(f"You said: {word}")
+
+                    # Close window and quit program when user says "That is all"
+                    if word.lower() == "that is all":
+                        print(f"{model}: See you later!")
+                        window.close()
+                        quit()
+
+                    # if user wants to assistant to draw something (has "draw" in prompt)
+                    if "draw" in word:
+                        image_url = generate_image_response(word)
+                        print(f"{model}: Here's {word[i:]}")
+                        print(image_url)
+                        print("=====")
+
+                    # if user asks a standard question (no "draw" request)
+                    else:
+                        message = generate_text_response(word, conversation)
+
+                        # Show GPT's response
+                        print(f"{model}: {message}")
+
+                        # Uncomment to have model speak response
+                        # voice.generate_and_play_audio(message, playInBackground=False)
+                        print("=====")
+
+                except Exception as e:
+                    print("Couldn't interpret audio, try again.".format(e))
                     print("=====")
 
-                # if user asks a standard question (no "draw" request)
-                else:
-                    message = generate_text_response(word, conversation)
+        # Option 2: User writes question
+        if event == "Type" and is_valid_user(values):
+            update_from_user_inputs(values)
 
-                    # Show GPT's response
-                    print(f"{model}: {message}")
-
-                    # Uncomment to have model speak response
-                    # voice.generate_and_play_audio(message, playInBackground=False)
-                    print("=====")
-
-            except Exception as e:
-                print("Couldn't interpret audio, try again.".format(e))
-                print("=====")
-
-    # Option 2: User writes question
-    if event == "Type" and is_valid_user(values):
-        update_from_user_inputs(values)
+    window.close()
 
 
-window.close()
+if __name__ == "__main__":
+    SETTINGS_PATH = str(Path.cwd())
+    print(SETTINGS_PATH)
+    # create the settings object and use ini format
+    settings = sg.UserSettings(
+        path=SETTINGS_PATH, filename="config.ini", use_config_file=True, convert_bools_and_none=True
+    )
+    configur = ConfigParser()
+    configur.read('config.ini')
 
-# if __name__ == "__main__":
+    theme = configur.get("GUI", "theme")
+    font_family = configur.get("GUI", "font_family")
+    font_size = configur.getint("GUI", "font_size")
+    sg.theme(theme)
+    sg.set_options(font=(font_family, font_size))
 
+    main_window()

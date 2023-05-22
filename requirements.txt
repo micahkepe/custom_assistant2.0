@@ -3,3 +3,4 @@ openai==0.27.6
 SpeechRecognition==3.10.0
 pyaudio==0.2.13
 PySimpleGUI~=4.60.4
+requests~=2.30.0
