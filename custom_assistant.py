@@ -14,8 +14,8 @@ voice = user.get_voices_by_name(model)[0]
 # ----- GUI Definition ----- #
 sg.theme("dark grey 9")
 layout = [[sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
-          [sg.Text("OpenAI Key:"), sg.Input(key="-OPENAI KEY-")],
-          [sg.Text("ElevenLabs Key:"), sg.Input(key="-ELEVEN LABS KEY-")],
+          # [sg.Text("OpenAI Key:"), sg.Input(key="-OPENAI KEY-")],
+          # [sg.Text("ElevenLabs Key:"), sg.Input(key="-ELEVEN LABS KEY-")],
           [sg.Text("Model:"), sg.Input(key="-MODEL-")],
           [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
           [sg.Multiline(key="-OUT-")],
