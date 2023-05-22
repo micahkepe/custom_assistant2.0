@@ -177,3 +177,6 @@ while True:
 
 
 window.close()
+
+# if __name__ == "__main__":
+
