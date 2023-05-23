@@ -5,11 +5,10 @@ from elevenlabslib import *
 from pathlib import Path
 from configparser import ConfigParser
 import requests
-import time
 
 # Enter keys for OpenAI and ElevenLabs, then put voice model's name and your name
-OPENAI_API_KEY = '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'
-ELEVENLABS_KEY = '9fe3e2fe88d92bfb0c3af2cde624d296'
+OPENAI_API_KEY = 'ENTER OPENAI KEY HERE'
+ELEVENLABS_KEY = 'ENTER ELEVENLABS KEY HERE'
 
 # find microphone to use later to record audio
 r = sr.Recognizer()
@@ -59,7 +58,8 @@ def get_users_models():
 
 def has_selected_model(user_values):
     """
-    :param user_values: values associated with user's window
+    Checks if user has selected a model
+    :param user_values: dictionary of values associated with user's window
     :return: None
     """
     if user_values["-Selected Model-"] == '':
@@ -70,6 +70,11 @@ def has_selected_model(user_values):
 
 
 def has_name(user_values):
+    """
+    Checks if user has inputted a name
+    :param user_values: dictionary of values associated with user's window
+    :return: None
+    """
     if user_values["-USER NAME-"] == '':
         sg.popup("Please write your name.")
         return False
@@ -100,7 +105,7 @@ def generate_image_response(prompt):
     """
     Generate response from GPT/ DallE for a query involving drawing a picture
     :param prompt: string of the user's query
-    :return: string image url of generated drawing
+    :return: string image url of generated drawing, index of rest of string after "draw"
     """
     # find subject user wants
     i = prompt.find("draw")
@@ -115,7 +120,7 @@ def generate_image_response(prompt):
 
     # get url from response and return
     url = gpt_response['data'][0]['url']
-    return url
+    return url, i
 
 
 def generate_text_response(prompt, ongoing_convo):
@@ -123,7 +128,7 @@ def generate_text_response(prompt, ongoing_convo):
     Generate response from GPT for a standard query not involving drawing a picture
         and update chat log
     :param prompt: string of the user's query
-    :param ongoing_convo: ongoing conversation between user and model
+    :param ongoing_convo: list of dictionaries of ongoing conversations between user and model
     :return: string of GPT's response
     """
     ongoing_convo.append({"role": "user", "content": prompt})
@@ -140,6 +145,38 @@ def generate_text_response(prompt, ongoing_convo):
     answer = response["choices"][0]["message"]["content"]
     ongoing_convo.append({"role": "assistant", "content": answer})
     return answer
+
+
+def generate_and_show_response(prompt, model, ongoing_convo, voice, values):
+    """
+    Generates response to user's question and displays answer in popups and terminal
+    :param prompt: string of the user's query
+    :param model: model selected by the user from available models
+    :param ongoing_convo: list of dictionaries representing ongoing conversation
+    :param voice: ElevenLabsVoice object tied to selected model
+    :param values: dictionary of values associated with main window
+    :return: None
+    """
+    # if user wants to assistant to draw something (has "draw" in prompt)
+    if "draw" in prompt:
+        image_url, idx = generate_image_response(prompt)
+        print(f"{model}: Here's {prompt[idx:]}")
+        print(image_url)
+        sg.popup_scrolled(f"You said: {prompt} \n {model}: Here's {prompt[idx:]} \n {image_url}")
+        print("=====")
+
+    # if user asks a standard question (no "draw" request)
+    else:
+        message = generate_text_response(prompt, ongoing_convo)
+
+        # Show GPT's response
+        if values["-Spoken Response-"] == "Yes":
+            voice.generate_and_play_audio(message, playInBackground=False)
+
+        print(f"{model}: {message}")
+        sg.popup_scrolled(f"You said: {prompt}\n\n{model}: {message}")
+
+        print("=====")
 
 
 def main_window():
@@ -197,34 +234,32 @@ def main_window():
                         window.close()
                         quit()
 
-                    # if user wants to assistant to draw something (has "draw" in prompt)
-                    if "draw" in word:
-                        image_url = generate_image_response(word)
-                        print(f"{model}: Here's {word[i:]}")
-                        print(image_url)
-                        sg.popup_scrolled(f"You said: {word} \n {model}: Here's {word[i:]} \n {image_url}")
-                        print("=====")
-
-                    # if user asks a standard question (no "draw" request)
-                    else:
-                        message = generate_text_response(word, conversation)
-
-                        # Show GPT's response
-                        if values["-Spoken Response-"] == "Yes":
-                            voice.generate_and_play_audio(message, playInBackground=False)
-
-                        print(f"{model}: {message}")
-                        sg.popup_scrolled(f"You said: {word} \n {model}: {message}")
-
-                        print("=====")
+                    # Generate and display response
+                    generate_and_show_response(word, model, conversation, voice, values)
 
                 except Exception as e:
                     print("Couldn't interpret audio, try again.".format(e))
                     print("=====")
 
         # Option 2: User writes question
-        if event == "Type":
-            pass
+        if event == "Type" and has_name(values) and has_selected_model(values):
+            name = values["-USER NAME-"]
+            model = values["-Selected Model-"]
+            voice = user.get_voices_by_name(model)[0]
+
+            # initializing the conversation between user and model before queries with context
+            conversation = [
+                {"role": "system", "content": f"Your name is {model} and you're an assistant for {name}."},
+            ]
+
+            # Have user type question in popup
+            word = sg.popup_get_text("Enter question")
+
+            # Show user's query
+            print(f"You said: {word}")
+
+            # Generate and display response
+            generate_and_show_response(word, model, conversation, voice, values)
 
     window.close()
 
