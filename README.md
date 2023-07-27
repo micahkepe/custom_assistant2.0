@@ -36,10 +36,6 @@ These instructions will help you get a copy of the project up and running on you
    ```
 You'll be prompted when to ask your questions if speaking. The program can be ended by saying the instruction "That is all."
 
-## 💡 Usage
-
-Describe how to use your project or show some examples of usage.
-
 ## 🛠️ Built with
 
 - [OpenAI](https://openai.com) - AI research lab
