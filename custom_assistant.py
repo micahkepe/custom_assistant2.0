@@ -5,10 +5,14 @@ from elevenlabslib import *
 from pathlib import Path
 from configparser import ConfigParser
 import requests
+from dotenv import load_dotenv
+import os
 
-# Enter keys for OpenAI and ElevenLabs, then put voice model's name and your name
-OPENAI_API_KEY = 'ENTER OPENAI KEY HERE'
-ELEVENLABS_KEY = 'ENTER ELEVENLABS KEY HERE'
+
+# Load OpenAI and ElevenLabs keys from .env file
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY")
 
 # find microphone to use later to record audio
 r = sr.Recognizer()
@@ -180,86 +184,87 @@ def generate_and_show_response(prompt, model, ongoing_convo, voice, values):
 
 
 def main_window():
-    # ----- GUI Definition ----- #
+    # Cache available models and voice objects
     available_models = get_users_models()
+    voices = {model: user.get_voices_by_name(model)[0] for model in available_models}
+
+    # GUI Definition
     sg.theme("dark grey 9")
-    layout = [[sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
-              [sg.Text("Model:"), sg.Combo(available_models, readonly=True, key="-Selected Model-")],
-              [sg.Text("Spoken Responses:"), sg.Combo(["Yes", "No"], readonly=True, key="-Spoken Response-", default_value="Yes")],
-              [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
-              # [sg.Multiline(key="-OUT-", size=(60, 18), auto_refresh=True)],
-              [sg.Save("Save"), sg.Exit("Exit")]
-              ]
+    layout = [
+        [sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
+        [sg.Text("Model:"), sg.Combo(available_models, readonly=True, key="-Selected Model-")],
+        [sg.Text("Spoken Responses:"), sg.Combo(["Yes", "No"], readonly=True, key="-Spoken Response-", default_value="Yes")],
+        [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
+        [sg.Save("Save"), sg.Exit("Exit")]
+    ]
 
     # Create the window
     window_title = settings["GUI"]["title"]
     window = sg.Window(window_title, layout)
 
+    # Store ongoing conversations
+    conversations = {}
+
     while True:
         event, values = window.read()
-        # print(event, values)
-        # user closes window
+
+        # User closes window
         if event in (sg.WINDOW_CLOSED, "Exit"):
             break
 
-        # Option 1: User Speaks Question
-        if event == "Speak" and has_name(values) and has_selected_model(values):
+        if event in ("Speak", "Type") and has_name(values) and has_selected_model(values):
             name = values["-USER NAME-"]
             model = values["-Selected Model-"]
-            voice = user.get_voices_by_name(model)[0]
+            voice = voices[model]  # Reuse voice object from cache
 
-            # initializing the conversation between user and model before queries with context
-            conversation = [
-                {"role": "system", "content": f"Your name is {model} and you're an assistant for {name}."},
-            ]
+            # Initialize conversation for this model if not already done
+            if model not in conversations:
+                conversations[model] = [
+                    {"role": "system", "content": f"Your name is {model} and you're an assistant for {name}."},
+                ]
 
-            with mic as source:
-                r.adjust_for_ambient_noise(source, duration=1)  # Can set the duration with duration keyword
+            conversation = conversations[model]
 
-                print("Speak now...")
-                sg.popup_timed("Speak now...", auto_close=True, auto_close_duration=1)
+            # Handle Speak event
+            if event == "Speak":
+                with mic as source:
+                    r.adjust_for_ambient_noise(source, duration=1)  # Can set the duration with duration keyword
 
-                try:
-                    # Gather audio and transcribe to text
-                    audio = r.listen(source)
-                    word = r.recognize_google(audio)
+                    print("Speak now...")
+                    sg.popup_timed("Speak now...", auto_close=True, auto_close_duration=1)
 
-                    # Show user's query
-                    print(f"You said: {word}")
+                    try:
+                        # Gather audio and transcribe to text
+                        audio = r.listen(source)
+                        word = r.recognize_google(audio)
 
-                    # Close window and quit program when user says "That is all"
-                    if word.lower() == "that is all":
-                        print(f"{model}: See you later!")
-                        sg.popup_timed(f"{model}: See you later!", auto_close=True, auto_close_duration=2)
-                        window.close()
-                        quit()
+                        # Show user's query
+                        print(f"You said: {word}")
 
-                    # Generate and display response
-                    generate_and_show_response(word, model, conversation, voice, values)
+                        # Close window and quit program when user says "That is all"
+                        if word.lower() == "that is all":
+                            print(f"{model}: See you later!")
+                            sg.popup_timed(f"{model}: See you later!", auto_close=True, auto_close_duration=2)
+                            window.close()
+                            quit()
 
-                except Exception as e:
-                    print("Couldn't interpret audio, try again.".format(e))
-                    print("=====")
+                        # Generate and display response
+                        generate_and_show_response(word, model, conversation, voice, values)
 
-        # Option 2: User writes question
-        if event == "Type" and has_name(values) and has_selected_model(values):
-            name = values["-USER NAME-"]
-            model = values["-Selected Model-"]
-            voice = user.get_voices_by_name(model)[0]
+                    except Exception as e:
+                        print(f"Couldn't interpret audio, try again. Error: {e}")
+                        print("=====")
 
-            # initializing the conversation between user and model before queries with context
-            conversation = [
-                {"role": "system", "content": f"Your name is {model} and you're an assistant for {name}."},
-            ]
+            # Handle Type event
+            elif event == "Type":
+                # Have user type question in popup
+                word = sg.popup_get_text("Enter question")
 
-            # Have user type question in popup
-            word = sg.popup_get_text("Enter question")
+                # Show user's query
+                print(f"You said: {word}")
 
-            # Show user's query
-            print(f"You said: {word}")
-
-            # Generate and display response
-            generate_and_show_response(word, model, conversation, voice, values)
+                # Generate and display response
+                generate_and_show_response(word, model, conversation, voice, values)
 
     window.close()
 
