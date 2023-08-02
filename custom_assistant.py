@@ -7,10 +7,7 @@ from configparser import ConfigParser
 import requests
 from dotenv import load_dotenv
 import os
-import asyncio
-import threading
-import httpx
-import logging
+
 
 # Load OpenAI and ElevenLabs keys from .env file
 load_dotenv()
@@ -22,27 +19,43 @@ r = sr.Recognizer()
 mic = sr.Microphone()
 
 
-async def get_users_models_async():
+def get_users_models():
     """
-    Gets all models available to user from ElevenLabs API
-    :return: list of model names
+    Get a list of the available voices in the user's ElevenLabs account
+    :return: list of strings of available voice models
     """
     models = []
+
+    # Replace 'YOUR_API_KEY' with your ElevenLabs API key
     API_KEY = ELEVENLABS_KEY
+
+    # Set the base URL for the ElevenLabs API
     BASE_URL = 'https://api.elevenlabs.io/v1'
+
+    # Set the endpoint to retrieve the voices
     ENDPOINT = '/voices'
-    headers = {'accept': 'application/json', 'xi-api-key': API_KEY}
 
-    async with httpx.AsyncClient() as client:
-        response = await client.get(BASE_URL + ENDPOINT, headers=headers)
+    # Set the headers including the API key
+    headers = {
+        'accept': 'application/json',
+        'xi-api-key': API_KEY
+    }
 
+    # Send a GET request to retrieve the voices
+    response = requests.get(BASE_URL + ENDPOINT, headers=headers)
+
+    # Check if the request was successful
     if response.status_code == 200:
         voices = response.json()['voices']
+
+        # Extract the names of the voices
         voice_names = [voice['name'] for voice in voices]
+
+        # Print the voice names
         for name in voice_names:
             models.append(name)
     else:
-        logging.error(f"Error getting models from ElevenLabs API: {response.status_code}")
+        print('Error:', response.status_code)
 
     return models
 
@@ -73,7 +86,11 @@ def has_name(user_values):
     return True
 
 
-async def is_valid_user_async():
+def is_valid_user():
+    """"
+    Checks if user's keys are valid
+    :return: boolean value of valid or not
+    """
     try:
         ElevenLabsUser(ELEVENLABS_KEY)
         openai.api_key = OPENAI_API_KEY
@@ -166,17 +183,16 @@ def generate_and_show_response(prompt, model, ongoing_convo, voice, values):
         print("=====")
 
 
-async def main_window():
+def main_window():
     # Cache available models and voice objects
-    available_models_future = asyncio.ensure_future(get_users_models_async())
-    available_models = []
-    voices = {}
+    available_models = get_users_models()
+    voices = {model: user.get_voices_by_name(model)[0] for model in available_models}
 
     # GUI Definition
     sg.theme("dark grey 9")
     layout = [
         [sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
-        [sg.Text("Model:"), sg.Combo(values=available_models, readonly=True, key="-Selected Model-")],
+        [sg.Text("Model:"), sg.Combo(available_models, readonly=True, key="-Selected Model-")],
         [sg.Text("Spoken Responses:"), sg.Combo(["Yes", "No"], readonly=True, key="-Spoken Response-", default_value="Yes")],
         [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
         [sg.Save("Save"), sg.Exit("Exit")]
@@ -190,17 +206,11 @@ async def main_window():
     conversations = {}
 
     while True:
-        event, values = window.read(timeout=100)  # add a timeout value for async functionality
+        event, values = window.read()
 
         # User closes window
         if event in (sg.WINDOW_CLOSED, "Exit"):
             break
-
-        # If API call to get user models has finished
-        if available_models_future.done() and not available_models:
-            available_models = available_models_future.result()
-            voices = {model: user.get_voices_by_name(model)[0] for model in available_models}
-            window["-Selected Model-"].update(values=available_models)
 
         if event in ("Speak", "Type") and has_name(values) and has_selected_model(values):
             name = values["-USER NAME-"]
@@ -261,10 +271,7 @@ async def main_window():
 
 if __name__ == "__main__":
     # Check if the user is a valid user from the provided keys
-    asyncio.run(is_valid_user_async())
-
-    # Configure logging setup to INFO level
-    logging.basicConfig(level=logging.INFO)
+    is_valid_user()
 
     user = ElevenLabsUser(ELEVENLABS_KEY)
 
@@ -282,4 +289,4 @@ if __name__ == "__main__":
     sg.theme(theme)
     sg.set_options(font=(font_family, font_size))
 
-    asyncio.run(main_window())
+    main_window()
