@@ -4,3 +4,5 @@
 # Virtual environment
 .venv
 
+# Models cache 
+**/models_cache.json

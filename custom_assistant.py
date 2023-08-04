@@ -8,6 +8,8 @@ import requests
 from dotenv import load_dotenv
 import os
 import logging
+import json
+import time
 
 # Load OpenAI and ElevenLabs keys from .env file
 load_dotenv()
@@ -18,6 +20,10 @@ ELEVENLABS_KEY = os.getenv("ELEVENLABS_KEY")
 r = sr.Recognizer()
 mic = sr.Microphone()
 
+# model cache
+CACHE_FILE = "models_cache.json"
+CACHE_TIME = 60 * 60  # 1 hour
+
 
 def get_users_models():
     """
@@ -26,33 +32,50 @@ def get_users_models():
     """
     models = []
 
-    # Replace 'YOUR_API_KEY' with your ElevenLabs API key
+    # check if cache file exists
+    if os.path.exists(CACHE_FILE):
+        # check if cache file is older than CACHE_TIME
+        if time.time() - os.path.getmtime(CACHE_FILE) > CACHE_TIME:
+            # delete cache file
+            logging.info(
+                f"Cache file is older than {CACHE_TIME} seconds. Deleting cache file."
+            )
+            os.remove(CACHE_FILE)
+        else:
+            # read cache file
+            logging.info(
+                f"Cache file is newer than {CACHE_TIME} seconds. Reading cache file."
+            )
+            with open(CACHE_FILE, "r") as f:
+                models = json.load(f)
+            return models
+
+    # HTTP request to retrieve the voices
     API_KEY = ELEVENLABS_KEY
-
-    # Set the base URL for the ElevenLabs API
     BASE_URL = "https://api.elevenlabs.io/v1"
-
-    # Set the endpoint to retrieve the voices
     ENDPOINT = "/voices"
-
-    # Set the headers including the API key
     headers = {"accept": "application/json", "xi-api-key": API_KEY}
 
-    # Send a GET request to retrieve the voices
     response = requests.get(BASE_URL + ENDPOINT, headers=headers)
 
     # Check if the request was successful
     if response.status_code == 200:
         voices = response.json()["voices"]
-
-        # Extract the names of the voices
         voice_names = [voice["name"] for voice in voices]
-
-        # Print the voice names
         for name in voice_names:
             models.append(name)
     else:
-        print("Error:", response.status_code)
+        sg.popup_error(
+            "ElevenLabs Key is not valid. Try different key at top of program."
+        )
+        logging.error(
+            f"ElevenLabs Key is not valid. HTTP Response Code: {response.status_code}"
+        )
+
+    # write cache file
+    logging.info(f"Writing cache file.")
+    with open(CACHE_FILE, "w") as f:
+        json.dump(models, f)
 
     return models
 
