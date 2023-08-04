@@ -7,7 +7,7 @@ from configparser import ConfigParser
 import requests
 from dotenv import load_dotenv
 import os
-
+import logging
 
 # Load OpenAI and ElevenLabs keys from .env file
 load_dotenv()
@@ -30,32 +30,29 @@ def get_users_models():
     API_KEY = ELEVENLABS_KEY
 
     # Set the base URL for the ElevenLabs API
-    BASE_URL = 'https://api.elevenlabs.io/v1'
+    BASE_URL = "https://api.elevenlabs.io/v1"
 
     # Set the endpoint to retrieve the voices
-    ENDPOINT = '/voices'
+    ENDPOINT = "/voices"
 
     # Set the headers including the API key
-    headers = {
-        'accept': 'application/json',
-        'xi-api-key': API_KEY
-    }
+    headers = {"accept": "application/json", "xi-api-key": API_KEY}
 
     # Send a GET request to retrieve the voices
     response = requests.get(BASE_URL + ENDPOINT, headers=headers)
 
     # Check if the request was successful
     if response.status_code == 200:
-        voices = response.json()['voices']
+        voices = response.json()["voices"]
 
         # Extract the names of the voices
-        voice_names = [voice['name'] for voice in voices]
+        voice_names = [voice["name"] for voice in voices]
 
         # Print the voice names
         for name in voice_names:
             models.append(name)
     else:
-        print('Error:', response.status_code)
+        print("Error:", response.status_code)
 
     return models
 
@@ -66,7 +63,7 @@ def has_selected_model(user_values):
     :param user_values: dictionary of values associated with user's window
     :return: None
     """
-    if user_values["-Selected Model-"] == '':
+    if user_values["-Selected Model-"] == "":
         sg.popup("Please select a model.")
         return False
 
@@ -79,7 +76,7 @@ def has_name(user_values):
     :param user_values: dictionary of values associated with user's window
     :return: None
     """
-    if user_values["-USER NAME-"] == '':
+    if user_values["-USER NAME-"] == "":
         sg.popup("Please write your name.")
         return False
 
@@ -87,21 +84,21 @@ def has_name(user_values):
 
 
 def is_valid_user():
-    """"
+    """ "
     Checks if user's keys are valid
     :return: boolean value of valid or not
     """
     try:
         ElevenLabsUser(ELEVENLABS_KEY)
         openai.api_key = OPENAI_API_KEY
-        openai.Completion.create(
-            engine="text-davinci-003",
-            prompt="Test",
-            max_tokens=5)
+        openai.Completion.create(engine="text-davinci-003", prompt="Test", max_tokens=5)
         return True
 
-    except:
-        sg.popup_error("OpenAI and/or ElevenLabs Key is not valid. Try different key(s) at top of program.")
+    except Exception as e:
+        sg.popup_error(
+            "OpenAI and/or ElevenLabs Key is not valid. Try different key(s) at top of program."
+        )
+        logging.error(f"OpenAI and/or ElevenLabs Key is not valid. Exception: {e}")
         return False
 
 
@@ -116,14 +113,10 @@ def generate_image_response(prompt):
     i += 5
 
     # generate GPT response
-    gpt_response = openai.Image.create(
-        prompt=prompt[i:],
-        n=1,
-        size="1024x1024"
-    )
+    gpt_response = openai.Image.create(prompt=prompt[i:], n=1, size="1024x1024")
 
     # get url from response and return
-    url = gpt_response['data'][0]['url']
+    url = gpt_response["data"][0]["url"]
     return url, i
 
 
@@ -166,7 +159,9 @@ def generate_and_show_response(prompt, model, ongoing_convo, voice, values):
         image_url, idx = generate_image_response(prompt)
         print(f"{model}: Here's {prompt[idx:]}")
         print(image_url)
-        sg.popup_scrolled(f"You said: {prompt} \n {model}: Here's {prompt[idx:]} \n {image_url}")
+        sg.popup_scrolled(
+            f"You said: {prompt} \n {model}: Here's {prompt[idx:]} \n {image_url}"
+        )
         print("=====")
 
     # if user asks a standard question (no "draw" request)
@@ -192,10 +187,21 @@ def main_window():
     sg.theme("dark grey 9")
     layout = [
         [sg.Text("Your Name:"), sg.Input(key="-USER NAME-")],
-        [sg.Text("Model:"), sg.Combo(available_models, readonly=True, key="-Selected Model-")],
-        [sg.Text("Spoken Responses:"), sg.Combo(["Yes", "No"], readonly=True, key="-Spoken Response-", default_value="Yes")],
+        [
+            sg.Text("Model:"),
+            sg.Combo(available_models, readonly=True, key="-Selected Model-"),
+        ],
+        [
+            sg.Text("Spoken Responses:"),
+            sg.Combo(
+                ["Yes", "No"],
+                readonly=True,
+                key="-Spoken Response-",
+                default_value="Yes",
+            ),
+        ],
         [sg.Text("Query Mode:"), sg.Button("Speak"), sg.Button("Type")],
-        [sg.Save("Save"), sg.Exit("Exit")]
+        [sg.Save("Save"), sg.Exit("Exit")],
     ]
 
     # Create the window
@@ -212,64 +218,91 @@ def main_window():
         if event in (sg.WINDOW_CLOSED, "Exit"):
             break
 
-        if event in ("Speak", "Type") and has_name(values) and has_selected_model(values):
-            name = values["-USER NAME-"]
-            model = values["-Selected Model-"]
-            voice = voices[model]  # Reuse voice object from cache
+        # Handle events with exceptions
+        try:
+            if (
+                event in ("Speak", "Type")
+                and has_name(values)
+                and has_selected_model(values)
+            ):
+                name = values["-USER NAME-"]
+                model = values["-Selected Model-"]
+                voice = voices[model]  # Reuse voice object from cache
 
-            # Initialize conversation for this model if not already done
-            if model not in conversations:
-                conversations[model] = [
-                    {"role": "system", "content": f"Your name is {model} and you're an assistant for {name}."},
-                ]
+                # Initialize conversation for this model if not already done
+                if model not in conversations:
+                    conversations[model] = [
+                        {
+                            "role": "system",
+                            "content": f"Your name is {model} and you're an assistant for {name}.",
+                        },
+                    ]
 
-            conversation = conversations[model]
+                conversation = conversations[model]
 
-            # Handle Speak event
-            if event == "Speak":
-                with mic as source:
-                    r.adjust_for_ambient_noise(source, duration=1)  # Can set the duration with duration keyword
+                # Handle Speak event
+                if event == "Speak":
+                    with mic as source:
+                        r.adjust_for_ambient_noise(
+                            source, duration=1
+                        )  # Can set the duration with duration keyword
 
-                    print("Speak now...")
-                    sg.popup_timed("Speak now...", auto_close=True, auto_close_duration=1)
+                        print("Speak now...")
+                        sg.popup_timed(
+                            "Speak now...", auto_close=True, auto_close_duration=1
+                        )
 
-                    try:
-                        # Gather audio and transcribe to text
-                        audio = r.listen(source)
-                        word = r.recognize_google(audio)
+                        try:
+                            # Gather audio and transcribe to text
+                            audio = r.listen(source)
+                            word = r.recognize_google(audio)
 
-                        # Show user's query
-                        print(f"You said: {word}")
+                            # Show user's query
+                            print(f"You said: {word}")
 
-                        # Close window and quit program when user says "That is all"
-                        if word.lower() == "that is all":
-                            print(f"{model}: See you later!")
-                            sg.popup_timed(f"{model}: See you later!", auto_close=True, auto_close_duration=2)
-                            window.close()
-                            quit()
+                            # Close window and quit program when user says "That is all"
+                            if word.lower() == "that is all":
+                                print(f"{model}: See you later!")
+                                sg.popup_timed(
+                                    f"{model}: See you later!",
+                                    auto_close=True,
+                                    auto_close_duration=2,
+                                )
+                                window.close()
+                                quit()
 
-                        # Generate and display response
-                        generate_and_show_response(word, model, conversation, voice, values)
+                            # Generate and display response
+                            generate_and_show_response(
+                                word, model, conversation, voice, values
+                            )
 
-                    except Exception as e:
-                        print(f"Couldn't interpret audio, try again. Error: {e}")
-                        print("=====")
+                        except Exception as e:
+                            print(f"Couldn't interpret audio, try again. Error: {e}")
+                            print("=====")
 
-            # Handle Type event
-            elif event == "Type":
-                # Have user type question in popup
-                word = sg.popup_get_text("Enter question")
+                # Handle Type event
+                elif event == "Type":
+                    # Have user type question in popup
+                    word = sg.popup_get_text("Enter question")
 
-                # Show user's query
-                print(f"You said: {word}")
+                    # Show user's query
+                    print(f"You said: {word}")
 
-                # Generate and display response
-                generate_and_show_response(word, model, conversation, voice, values)
+                    # Generate and display response
+                    generate_and_show_response(word, model, conversation, voice, values)
+        except Exception as e:
+            logging.error(f"Error: {e}")
+            sg.popup_error(f"Error: {e}")
 
-    window.close()
+        # Ensure window closes
+        finally:
+            window.close()
 
 
 if __name__ == "__main__":
+    # Set up logging
+    logging.basicConfig(level=logging.INFO)
+
     # Check if the user is a valid user from the provided keys
     is_valid_user()
 
@@ -278,10 +311,13 @@ if __name__ == "__main__":
     SETTINGS_PATH = str(Path.cwd())
     # create the settings object and use ini format
     settings = sg.UserSettings(
-        path=SETTINGS_PATH, filename="config.ini", use_config_file=True, convert_bools_and_none=True
+        path=SETTINGS_PATH,
+        filename="config.ini",
+        use_config_file=True,
+        convert_bools_and_none=True,
     )
     configur = ConfigParser()
-    configur.read('config.ini')
+    configur.read("config.ini")
 
     theme = configur.get("GUI", "theme")
     font_family = configur.get("GUI", "font_family")
