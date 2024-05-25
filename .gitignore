@@ -6,3 +6,6 @@
 
 # Models cache 
 **/models_cache.json
+
+# JetBrains-specific
+.idea/
