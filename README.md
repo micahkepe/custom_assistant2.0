@@ -28,7 +28,11 @@ These instructions will help you get a copy of the project up and running on you
   pip install -r requirements.txt
   ```
 
-4. Open the `custom_assistant.py` file in a text editor and replace the placeholders at the top of the file with your obtained OpenAI and ElevenLabs API keys.
+4. Add your OpenAI and ElevenLabs API keys to the `.env` file:
+   ```
+   OPENAI_API_KEY=your_openai_api_key
+   ELEVENLABS_API_KEY=your_elevenlabs_api_key
+   ```
 
 5. Run `custom_assistant.py` to start the assistant:
    ```
